@@ -831,16 +831,36 @@ def build_nodes_text(data: dict[str, Any], edge_hosts: list[str], cfg: Config) -
     lines: list[str] = []
     seen_links: set[str] = set()
     index = 0
-    ordered = sorted(
-        data["countries"].items(),
-        key=lambda kv: (-int(kv[1].get("count") or 0), str(kv[1].get("code") or kv[0])),
-    )
+    # 国家偏好与排除：默认不要俄罗斯/越南，优先亚太住宅
+    exclude = {
+        c.strip().upper()
+        for c in (os.environ.get("EXCLUDE_COUNTRIES", "RU,VN") or "").split(",")
+        if c.strip()
+    }
+    prefer = [
+        c.strip().upper()
+        for c in (os.environ.get("PREFER_COUNTRIES", "KR,JP,TH,IN,SG,HK,TW") or "").split(",")
+        if c.strip()
+    ]
+    def _rank(item):
+        code = str(item[1].get("code") or item[0]).upper()
+        pos = prefer.index(code) if code in prefer else len(prefer)
+        return (pos, -int(item[1].get("count") or 0), code)
+    ordered = sorted(data["countries"].items(), key=_rank)
+    latency_max = int(os.environ.get("LATENCY_MAX_MS", "1200") or 1200)
     for code, group in ordered:
+        if str(code).upper() in exclude:
+            continue
         name = COUNTRY_ZH.get(code) or group.get("name") or code
         nodes = sorted(
             group["nodes"],
             key=lambda n: (n.get("residential") != "residential", n.get("latency_ms") is None, n.get("latency_ms") or 0),
         )
+        # 丢掉延迟过高（或压根测不出延迟）的：那种连上基本 5s+ 白占位置
+        nodes = [
+            n for n in nodes
+            if n.get("latency_ms") is not None and int(n.get("latency_ms") or 0) <= latency_max
+        ]
         residential = [n for n in nodes if n.get("residential") == "residential"]
         others = [n for n in nodes if n.get("residential") != "residential"]
         chosen = residential[: cfg.max_residential_per_country] + others[: cfg.max_datacenter_per_country]
