@@ -847,7 +847,7 @@ def build_nodes_text(data: dict[str, Any], edge_hosts: list[str], cfg: Config) -
         pos = prefer.index(code) if code in prefer else len(prefer)
         return (pos, -int(item[1].get("count") or 0), code)
     ordered = sorted(data["countries"].items(), key=_rank)
-    latency_max = int(os.environ.get("LATENCY_MAX_MS", "1200") or 1200)
+    latency_max = int(os.environ.get("LATENCY_MAX_MS", "4000") or 1200)
     for code, group in ordered:
         if str(code).upper() in exclude:
             continue
